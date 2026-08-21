@@ -178,3 +178,7 @@ bool tensor::cross_entropy(Tensor* out, const Tensor* a, Tensor* b) {
 
         return true;
 }
+
+bool tensor::relu_grad(Tensor* out, const Tensor* in) {}
+bool tensor::softmax_grad(Tensor* out, const Tensor* in) {}
+bool tensor::cross_entropy_grad(Tensor* out, const Tensor* a, const Tensor* b) {}
