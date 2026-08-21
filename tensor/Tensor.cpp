@@ -179,6 +179,35 @@ bool tensor::cross_entropy(Tensor* out, const Tensor* a, Tensor* b) {
         return true;
 }
 
-bool tensor::relu_grad(Tensor* out, const Tensor* in) {}
-bool tensor::softmax_grad(Tensor* out, const Tensor* in) {}
-bool tensor::cross_entropy_grad(Tensor* out, const Tensor* a, const Tensor* b) {}
+// bool tensor::relu_grad(Tensor* out, const Tensor* in) {}
+// bool tensor::softmax_grad(Tensor* out, const Tensor* in) {}
+// bool tensor::cross_entropy_grad(Tensor* out, const Tensor* a, const Tensor* b) {}
+
+ModelVar* model::create(Arena* arena, ModelContext* model, u32 rows, u32 cols, u32 flags, ModelVarOperator op) {
+        ModelVar* out = arena->alloc<ModelVar>();
+        out->flags = flags;
+        out->op = op;
+        out->index = model->num_vars++;
+        out->val = tensor::create(arena, rows, cols);
+
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD)) {
+                out->grad = tensor::create(arena, rows, cols);
+        }
+
+        return out;
+}
+
+ModelVar* unary_op(Arena* arena, ModelContext* model, ModelVar* input, u32 rows, u32 cols, u32 flags, ModelVarOperator op) {
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD)) {
+                flags |= static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD);
+        }
+
+        ModelVar* out = model::create(arena, model, rows, cols, flags, op);
+        out->inputs[0] = input;
+
+        return out;
+}
+
+ModelVar* model::relu(Arena* arena, ModelContext* model, ModelVar* input, u32 flags) {
+        return unary_op(arena, model, input, input->val->rows, input->val->cols, flags, ModelVarOperator::MV_OP_RELU);
+}
