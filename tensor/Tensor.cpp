@@ -164,7 +164,7 @@ bool tensor::softmax(Tensor* out, const Tensor* in) {
         return true;
 }
 
-bool tensor::cross_entropy(Tensor* out, const Tensor* a, Tensor* b) {
+bool tensor::cross_entropy(Tensor* out, const Tensor* a, const Tensor* b) {
         if(a == nullptr || a->data == nullptr || a->rows == 0 || a->cols == 0 ||
                 b == nullptr || b->data == nullptr || b->rows == 0 || b->cols == 0 ||
                 a->rows != b->rows || a->cols != b->cols ||
@@ -183,10 +183,10 @@ bool tensor::cross_entropy(Tensor* out, const Tensor* a, Tensor* b) {
 // bool tensor::softmax_grad(Tensor* out, const Tensor* in) {}
 // bool tensor::cross_entropy_grad(Tensor* out, const Tensor* a, const Tensor* b) {}
 
-ModelVar* model::create(Arena* arena, ModelContext* model, u32 rows, u32 cols, u32 flags, ModelVarOperator op) {
+ModelVar* model::var::create(Arena* arena, ModelContext* model, u32 rows, u32 cols, u32 flags) {
         ModelVar* out = arena->alloc<ModelVar>();
         out->flags = flags;
-        out->op = op;
+        out->op = ModelVarOperator::MV_OP_CREATE;
         out->index = model->num_vars++;
         out->val = tensor::create(arena, rows, cols);
 
@@ -194,20 +194,65 @@ ModelVar* model::create(Arena* arena, ModelContext* model, u32 rows, u32 cols, u
                 out->grad = tensor::create(arena, rows, cols);
         }
 
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_INPUT)) { model->input = out; }
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_OUTPUT)) { model->output = out; }
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_DESIRED_OUTPUT)) { model->desired_output = out; }
+        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_COST)) { model->cost = out; }
+
         return out;
 }
 
+// helper func
 ModelVar* unary_op(Arena* arena, ModelContext* model, ModelVar* input, u32 rows, u32 cols, u32 flags, ModelVarOperator op) {
-        if(flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD)) {
+        if(input->flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD)) {
                 flags |= static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD);
         }
 
-        ModelVar* out = model::create(arena, model, rows, cols, flags, op);
+        ModelVar* out = model::var::create(arena, model, rows, cols, flags);
+        out->op = op;
         out->inputs[0] = input;
 
         return out;
 }
 
-ModelVar* model::relu(Arena* arena, ModelContext* model, ModelVar* input, u32 flags) {
+// helper func
+ModelVar* binary_op(Arena* arena, ModelContext* model, ModelVar* a, ModelVar* b, u32 rows, u32 cols, u32 flags, ModelVarOperator op) {
+        if((a->flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD)) || (b->flags & static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD))) {
+                flags |= static_cast<u32>(ModelVarFlags::MV_FLAG_REQUIRES_GRAD);
+        }
+
+        ModelVar* out = model::var::create(arena, model, rows, cols, flags);
+        out->op = op;
+        out->inputs[0] = a;
+        out->inputs[1] = b;
+
+        return out;
+}
+
+ModelVar* model::var::relu(Arena* arena, ModelContext* model, ModelVar* input, u32 flags) {
         return unary_op(arena, model, input, input->val->rows, input->val->cols, flags, ModelVarOperator::MV_OP_RELU);
+}
+
+ModelVar* model::var::softmax(Arena* arena, ModelContext* model, ModelVar* input, u32 flags) {
+        return unary_op(arena, model, input, input->val->rows, input->val->cols, flags, ModelVarOperator::MV_OP_SOFTMAX);
+}
+
+ModelVar* model::var::add(Arena* arena, ModelContext* model, ModelVar* a, ModelVar* b, u32 flags) {
+        if(a->val->rows != b->val->rows || a->val->cols != b->val->cols) return nullptr;
+        return binary_op(arena, model, a, b, a->val->rows, a->val->cols, flags, ModelVarOperator::MV_OP_ADD);
+}
+
+ModelVar* model::var::sub(Arena* arena, ModelContext* model, ModelVar* a, ModelVar* b, u32 flags) {
+        if(a->val->rows != b->val->rows || a->val->cols != b->val->cols) return nullptr;
+        return binary_op(arena, model, a, b, a->val->rows, a->val->cols, flags, ModelVarOperator::MV_OP_SUB);
+}
+
+ModelVar* model::var::dot(Arena* arena, ModelContext* model, ModelVar* a, ModelVar* b, u32 flags) {
+        if(a->val->rows != b->val->rows || a->val->cols != b->val->cols) return nullptr;
+        return binary_op(arena, model, a, b, a->val->rows, a->val->cols, flags, ModelVarOperator::MV_OP_DOT);
+}
+
+ModelVar* model::var::cross_entropy(Arena* arena, ModelContext* model, ModelVar* a, ModelVar* b, u32 flags) {
+        if(a->val->rows != b->val->rows || a->val->cols != b->val->cols) return nullptr;
+        return binary_op(arena, model, a, b, a->val->rows, a->val->cols, flags, ModelVarOperator::MV_OP_CROSS_ENTROPY);
 }
