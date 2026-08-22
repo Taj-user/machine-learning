@@ -3,6 +3,13 @@
 #include <new>
 #include <utility>
 
+class Arena;
+
+struct ArenaScratch {
+        Arena* arena;
+        std::size_t offset;
+};
+
 class Arena {
         public:
                 explicit Arena(std::size_t capacity)
@@ -31,8 +38,20 @@ class Arena {
                         return static_cast<T*>(object);
                 }
 
+                ArenaScratch scratch_get(Arena* arena) {
+                        return { arena, arena->used() };
+                }
+
+                void scratch_release(ArenaScratch scratch) {
+                        scratch.arena->rewind(scratch.offset);
+                }
+
                 void reset() {
                         m_offset = 0;
+                }
+
+                void rewind(std::size_t offset) {
+                        m_offset = offset;
                 }
 
                 std::size_t used() const {

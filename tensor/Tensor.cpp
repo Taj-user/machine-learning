@@ -256,3 +256,11 @@ ModelVar* model::var::cross_entropy(Arena* arena, ModelContext* model, ModelVar*
         if(a->val->rows != b->val->rows || a->val->cols != b->val->cols) return nullptr;
         return binary_op(arena, model, a, b, a->val->rows, a->val->cols, flags, ModelVarOperator::MV_OP_CROSS_ENTROPY);
 }
+
+ModelProgram* model::prog::create(Arena* arena, ModelContext* model, ModelVar* out) {
+        auto scratch = arena->scratch_get(arena);
+
+        // stuff
+
+        arena->scratch_release(scratch);
+}
